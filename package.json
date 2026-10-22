@@ -1,0 +1,10 @@
+{
+  "name": "al-qalqali-3d-reef-studio",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Al Qalqali MPA — 3D Coral Reef Mapping & Sea Turtle Photo-ID Web Application (In-Browser Video Processing + 60 FPS WebGL Continuous UV Mesh Viewer)",
+  "scripts": {
+    "start": "npx serve . -l 8080",
+    "dev": "python -m http.server 8080"
+  }
+}

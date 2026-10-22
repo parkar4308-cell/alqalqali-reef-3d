@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Al Qalqali reef survey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<style>
+  /* Hydrographic chart sheet: pale chart paper, ink linework, deep-water windows.
+     Seabed legend colours are the exact colours painted on the benthic map. */
+  :root {
+    --paper: #E5EDEB;
+    --paper-deep: #D6E2DF;
+    --ink: #0D2431;
+    --ink-soft: #46606B;
+    --rule: #B3C6C3;
+    --water: #08202B;
+    --water-line: #1F4252;
+    --signal: #C2401F;
+    --coral: #E6556E;
+    --algae: #41A55F;
+    --sand: #EBD7A0;
+    --radius: 3px;
+    --font: 'Archivo', 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.4;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+  /* ---------- Title block ---------- */
+  header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 14px 22px 12px;
+    border-bottom: 2px solid var(--ink);
+  }
+  header h1 {
+    font-size: 26px;
+    font-weight: 800;
+    font-stretch: 118%;
+    letter-spacing: -0.015em;
+    line-height: 1;
+  }
+  header .lede {
+    margin-top: 6px;
+    color: var(--ink-soft);
+    max-width: 62ch;
+  }
+  .titleblock {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 2px 18px;
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-align: left;
+  }
+  .titleblock dt { font-weight: 600; color: var(--ink); }
+  .titleblock dd { margin: 0; }
+
+  /* ---------- Sheet ---------- */
+  .sheet {
+    display: grid;
+    grid-template-columns: 276px minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  /* ---------- Transect index ---------- */
+  nav.index {
+    border-right: 1px solid var(--rule);
+    padding: 16px 0 16px 22px;
+    overflow-y: auto;
+  }
+  nav.index h2 {
+    font-size: 13px;
+    font-weight: 700;
+    margin: 0 18px 10px 0;
+  }
+  nav.index ul { list-style: none; }
+  .transect {
+    display: grid;
+    grid-template-columns: 84px 1fr;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-right: 4px solid transparent;
+    padding: 10px 14px 10px 0;
+    margin-bottom: 2px;
+  }
+  .transect:hover { background: var(--paper-deep); }
+  .transect[aria-current="true"] {
+    background: var(--paper-deep);
+    border-right-color: var(--signal);
+  }
+  .transect img {
+    width: 84px;
+    height: 54px;
+    object-fit: cover;
+    border-radius: var(--radius);
+    display: block;
+    background: var(--water);
+  }
+  .transect .name { font-weight: 700; font-size: 13.5px; line-height: 1.2; }
+  .transect .meta { color: var(--ink-soft); font-size: 12px; margin-top: 3px; }
+  .transect .flag { font-weight: 600; color: var(--ink); }
+  .transect .flag.none { color: var(--ink-soft); font-weight: 400; }
+
+  /* ---------- Working area ---------- */
+  main.work {
+    display: grid;
+    grid-template-rows: auto auto;
+    align-content: start;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .windows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    padding: 16px 22px 12px;
+    min-height: 0;
+  }
+  figure.win {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 7px;
+    min-height: 0;
+    min-width: 0;
+  }
+  figcaption {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 26px;
+  }
+  figcaption .cap-title { font-weight: 700; font-size: 14px; }
+  figcaption .cap-sub { color: var(--ink-soft); font-size: 12px; }
+
+  .pane {
+    position: relative;
+    background: var(--water);
+    border-radius: var(--radius);
+    overflow: hidden;
+    height: clamp(300px, 50vh, 620px);
+  }
+  #sourceVideo { width: 100%; height: 100%; object-fit: contain; display: block; }
+  #glCanvas, #hudCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #glCanvas { cursor: grab; touch-action: none; }
+  #glCanvas:active { cursor: grabbing; }
+  #hudCanvas { pointer-events: none; }
+
+  /* View switch (3D) */
+  .segmented { display: inline-flex; border: 1px solid var(--ink); border-radius: var(--radius); overflow: hidden; }
+  .segmented button {
+    background: transparent;
+    border: 0;
+    padding: 4px 11px;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+  .segmented button + button { border-left: 1px solid var(--ink); }
+  .segmented button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  .segmented button:not([aria-pressed="true"]):hover { background: var(--paper-deep); }
+
+  /* Overlays inside the 3D pane */
+  .legend {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    background: rgba(8, 32, 43, 0.82);
+    color: #DCE9E6;
+    border: 1px solid var(--water-line);
+    border-radius: var(--radius);
+    padding: 7px 10px;
+    font-size: 12px;
+    display: none;
+  }
+  .legend .ramp { height: 8px; width: 150px; border-radius: 2px; margin: 5px 0 3px;
+    background: linear-gradient(90deg, #30123b, #4662d7, #36aaf9, #1ae4b6, #72fe5e, #c7ef34, #fabb38, #f56918, #cb2a04, #7a0403); }
+  .legend .ends { display: flex; justify-content: space-between; color: #9FB6B3; }
+  .legend .sw { display: flex; align-items: center; gap: 7px; line-height: 1.7; }
+  .legend .sw i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+  .hint {
+    position: absolute;
+    left: 10px;
+    bottom: 10px;
+    background: rgba(8, 32, 43, 0.82);
+    color: #B7CAC7;
+    border: 1px solid var(--water-line);
+    border-radius: var(--radius);
+    padding: 5px 9px;
+    font-size: 12px;
+    pointer-events: none;
+  }
+  .pane-tools {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 6px;
+  }
+  .tool {
+    background: rgba(8, 32, 43, 0.82);
+    color: #DCE9E6;
+    border: 1px solid var(--water-line);
+    border-radius: var(--radius);
+    padding: 4px 9px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .tool:hover { background: rgba(31, 66, 82, 0.95); }
+  .tool[aria-pressed="false"] { color: #7E9693; }
+
+  /* Video transport and timeline */
+  .transport { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; }
+  .play {
+    width: 32px; height: 32px;
+    display: grid; place-items: center;
+    background: var(--ink); color: var(--paper);
+    border: 0; border-radius: 50%;
+  }
+  .play svg { width: 14px; height: 14px; fill: currentColor; }
+  .timeline { position: relative; height: 32px; cursor: pointer; touch-action: none; }
+  .timeline .rail { position: absolute; left: 0; right: 0; top: 14px; height: 4px; background: var(--rule); border-radius: 2px; }
+  .timeline .built {
+    position: absolute; top: 9px; height: 14px;
+    background: rgba(194, 64, 31, 0.18);
+    border-left: 2px solid var(--signal);
+    border-right: 2px solid var(--signal);
+  }
+  .timeline .played { position: absolute; left: 0; top: 14px; height: 4px; background: var(--ink); border-radius: 2px; }
+  .timeline .head { position: absolute; top: 6px; width: 3px; height: 20px; background: var(--ink); margin-left: -1px; border-radius: 1px; }
+  .time { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--ink-soft); min-width: 86px; text-align: right; }
+  .built-note { color: var(--ink-soft); font-size: 12px; }
+  .built-note b { color: var(--signal); font-weight: 700; }
+
+  /* ---------- Readout strip ---------- */
+  .readout {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    border-top: 2px solid var(--ink);
+    margin: 0 22px;
+  }
+  .readout section { padding: 12px 20px 14px 0; }
+  .readout section + section { padding-left: 20px; border-left: 1px solid var(--rule); }
+  .readout h3 { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+  .big { font-size: 30px; font-weight: 800; font-stretch: 118%; line-height: 1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .fine { color: var(--ink-soft); font-size: 12px; margin-top: 6px; }
+
+  .scale { position: relative; height: 42px; margin-top: 10px; }
+  .scale .ruler { position: absolute; left: 0; right: 0; top: 5px; height: 8px; border: 1px solid var(--ink); border-radius: 1px;
+    background: repeating-linear-gradient(90deg, transparent 0 calc(16.66% - 1px), var(--ink) calc(16.66% - 1px) 16.66%); }
+  .scale .pin { position: absolute; top: 0; width: 3px; height: 20px; background: var(--signal); margin-left: -1px; }
+  .scale .ticks { position: absolute; top: 20px; left: 0; right: 0; display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-soft); }
+
+  .cover-bar { display: flex; height: 12px; border: 1px solid var(--ink); border-radius: 1px; overflow: hidden; margin: 8px 0 8px; }
+  .cover-bar span { display: block; height: 100%; }
+  .cover-row { display: flex; align-items: center; justify-content: space-between; padding: 2px 0; font-size: 13px; }
+  .cover-row i { display: inline-block; width: 11px; height: 11px; border: 1px solid rgba(13,36,49,0.5); margin-right: 8px; vertical-align: -1px; }
+  .cover-row b { font-variant-numeric: tabular-nums; }
+
+  .turtle-id { font-size: 22px; font-weight: 800; font-stretch: 112%; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; margin-top: 8px; font-size: 13px; }
+  .kv dt { color: var(--ink-soft); }
+  .kv dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .downloads a, .downloads button.link {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    width: 100%;
+    padding: 5px 0;
+    border: 0;
+    border-bottom: 1px solid var(--rule);
+    background: none;
+    color: var(--ink);
+    text-align: left;
+    font-weight: 600;
+    font-size: 13px;
+    text-decoration: none;
+  }
+  .downloads button.link:hover { color: var(--signal); }
+  .downloads .ext { color: var(--ink-soft); font-weight: 400; font-size: 12px; }
+
+  /* ---------- Narrow screens ---------- */
+  @media (max-width: 1080px) {
+    body { overflow: auto; display: block; }
+    .sheet { grid-template-columns: 1fr; }
+    nav.index { border-right: 0; border-bottom: 1px solid var(--rule); padding: 12px 22px; }
+    nav.index ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px; }
+    .windows { grid-template-columns: 1fr; }
+    .pane { height: 56vw; min-height: 260px; }
+    header { flex-direction: column; align-items: flex-start; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Al Qalqali reef survey</h1>
+    <p class="lede">Each ROV clip on the left is rebuilt as a 3D model on the right, so you can check the model against the footage it came from.</p>
+  </div>
+  <dl class="titleblock">
+    <dt>Site</dt><dd>Al Qalqali Marine Protected Area, Khor Fakkan</dd>
+    <dt>Datum</dt><dd>WGS 84 / UTM zone 40N (EPSG:32640)</dd>
+    <dt>Scale basis</dt><dd>ROV assumed 1.75 m above the seabed</dd>
+  </dl>
+</header>
+
+<div class="sheet">
+  <nav class="index" aria-label="Transects">
+    <h2>Transects</h2>
+    <ul id="transectList"></ul>
+  </nav>
+
+  <main class="work">
+    <div class="windows">
+      <!-- Footage -->
+      <figure class="win">
+        <figcaption>
+          <span class="cap-title">ROV footage</span>
+          <span class="cap-sub" id="videoName">sample_reef_1.mp4</span>
+        </figcaption>
+        <div class="pane">
+          <video id="sourceVideo" muted loop playsinline preload="metadata"></video>
+        </div>
+        <div>
+          <div class="transport">
+            <button class="play" id="playBtn" aria-label="Play footage"></button>
+            <div class="timeline" id="timeline" role="slider" tabindex="0" aria-label="Footage position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div class="rail"></div>
+              <div class="built" id="builtBand"></div>
+              <div class="played" id="played"></div>
+              <div class="head" id="head"></div>
+            </div>
+            <span class="time" id="timeText">0:00 / 0:00</span>
+          </div>
+          <p class="built-note" id="builtNote"><b>Marked section</b>: the frames the 3D model was built from.</p>
+        </div>
+      </figure>
+
+      <!-- 3D model -->
+      <figure class="win">
+        <figcaption>
+          <span class="cap-title">3D model</span>
+          <div class="segmented" role="group" aria-label="Model colouring">
+            <button id="modeColour" aria-pressed="true">Colour</button>
+            <button id="modeHeight" aria-pressed="false">Height</button>
+            <button id="modeSeabed" aria-pressed="false">Seabed type</button>
+          </div>
+        </figcaption>
+        <div class="pane" id="modelPane">
+          <canvas id="glCanvas" aria-label="Interactive 3D reef model"></canvas>
+          <canvas id="hudCanvas"></canvas>
+          <div class="pane-tools">
+            <button class="tool" id="gridBtn" aria-pressed="true">Grid</button>
+            <button class="tool" id="turtleBtn" aria-pressed="true" hidden>Turtle outline</button>
+            <button class="tool" id="resetBtn">Reset view</button>
+          </div>
+          <div class="hint" id="hint">Drag to turn. Right-drag to pan. Scroll to zoom.</div>
+          <div class="legend" id="legend"></div>
+        </div>
+        <p class="built-note" id="modelNote">&nbsp;</p>
+      </figure>
+    </div>
+
+    <div class="readout">
+      <section aria-labelledby="h-complex">
+        <h3 id="h-complex">Reef complexity</h3>
+        <div class="big" id="uiRugosity">1.00</div>
+        <div class="scale" aria-hidden="true">
+          <div class="ruler"></div>
+          <div class="pin" id="rugPin"></div>
+          <div class="ticks"><span>1.0 flat</span><span>1.2</span><span>1.4</span><span>1.6 or more</span></div>
+        </div>
+        <p class="fine" id="uiArea">Surface area against a flat floor of the same footprint.</p>
+      </section>
+
+      <section aria-labelledby="h-cover">
+        <h3 id="h-cover">Seabed cover</h3>
+        <div class="cover-bar" id="coverBar" role="img" aria-label="Seabed cover"></div>
+        <div class="cover-row"><span><i style="background:var(--coral)"></i>Live coral</span><b id="uiCoral"></b></div>
+        <div class="cover-row"><span><i style="background:var(--algae)"></i>Algae</span><b id="uiAlgae"></b></div>
+        <div class="cover-row"><span><i style="background:var(--sand)"></i>Sand and rock</span><b id="uiSand"></b></div>
+      </section>
+
+      <section id="turtleSection" aria-labelledby="h-turtle" hidden>
+        <h3 id="h-turtle">Turtle in this clip</h3>
+        <div class="turtle-id" id="uiTurtleId"></div>
+        <dl class="kv">
+          <dt>Shell length</dt><dd id="uiTurtleScl"></dd>
+          <dt>Catalogue</dt><dd id="uiTurtleMatch"></dd>
+        </dl>
+        <p class="fine" id="uiTurtleNear"></p>
+      </section>
+
+      <section class="downloads" aria-labelledby="h-dl">
+        <h3 id="h-dl">Download</h3>
+        <button class="link" id="dlSheet"><span>Report sheet</span><span class="ext">JPG</span></button>
+        <button class="link" id="dlObj"><span>3D surface</span><span class="ext">OBJ</span></button>
+        <button class="link" id="dlJson"><span>Measurements</span><span class="ext">JSON</span></button>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script src="demo_data.js"></script>
+<script>
+// ============================================================================
+// Content
+// ============================================================================
+const TRANSECTS = [
+  { id: 'sample_reef_1', name: 'Rubble mound',  dur: '0:14' },
+  { id: 'reef_sample_2', name: 'Coral wall',    dur: '0:12' },
+  { id: 'reef_sample_3', name: 'Open reef floor', dur: '0:20' },
+  { id: 'reef_sample_4', name: 'Rock and sand', dur: '0:06' },
+];
+const BUILT_SECONDS = 1.5; // 4 frames at 2 fps (0, 0.5, 1.0, 1.5 s) feed the reconstruction
+
+const $ = (id) => document.getElementById(id);
+const fmtTime = (s) => { s = Math.max(0, s || 0); return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); };
+const pct = (v) => Number(v).toFixed(1) + '%';
+
+// ============================================================================
+// WebGL mesh renderer (continuous UV-textured triangle surface)
+// ============================================================================
+const glCanvas = $('glCanvas'), hudCanvas = $('hudCanvas');
+const gl = glCanvas.getContext('webgl', { antialias: true, preserveDrawingBuffer: true });
+const hud = hudCanvas.getContext('2d');
+
+const vsSource = `attribute vec3 aPos; attribute vec2 aUV; uniform mat4 uMVP; varying vec2 vUV;
+  void main(){ vUV = aUV; gl_Position = uMVP * vec4(aPos, 1.0); }`;
+const fsSource = `precision mediump float; varying vec2 vUV; uniform sampler2D uTex;
+  void main(){ gl_FragColor = texture2D(uTex, vUV); }`;
+function compileShader(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; }
+const prog = gl.createProgram();
+gl.attachShader(prog, compileShader(gl.VERTEX_SHADER, vsSource));
+gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, fsSource));
+gl.linkProgram(prog); gl.useProgram(prog);
+
+const posBuffer = gl.createBuffer(), uvBuffer = gl.createBuffer(), indexBuffer = gl.createBuffer();
+const extUint = gl.getExtension('OES_element_index_uint');
+const aPos = gl.getAttribLocation(prog, 'aPos'), aUV = gl.getAttribLocation(prog, 'aUV');
+const uMVP = gl.getUniformLocation(prog, 'uMVP');
+
+let numIndices = 0;
+let glTextures = [null, null, null];
+let bounds = { x0: -1, x1: 1, y0: -1, y1: 1, z0: -2, z1: -1 };
+let currentDataset = null;
+let renderMode = 0; // 0 colour, 1 height, 2 seabed type
+let yaw = -0.34, pitch = 0.44, zoom = 2.55, panX = 0, panY = 0.02;
+let dragging = false, btn = 0, lx = 0, ly = 0;
+
+function makeTexture(dataUrl, slot) {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([8, 32, 43, 255]));
+  const img = new Image();
+  img.onload = () => {
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    drawScene();
+  };
+  img.src = dataUrl;
+  glTextures[slot] = tex;
+}
+
+function buildMesh(ds) {
+  const W = ds.grid_w, H = ds.grid_h, xyz = ds.xyz_flat, valid = ds.valid_flat;
+  const positions = new Float32Array(W * H * 3), uvs = new Float32Array(W * H * 2);
+  let xMin = 1e9, xMax = -1e9, yMin = 1e9, yMax = -1e9, zMin = 1e9, zMax = -1e9;
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    const i = r * W + c, x = xyz[i*3], y = xyz[i*3+1], z = xyz[i*3+2];
+    positions[i*3] = x; positions[i*3+1] = y; positions[i*3+2] = z;
+    uvs[i*2] = c / (W - 1); uvs[i*2+1] = r / (H - 1);
+    if (valid[i]) {
+      if (x < xMin) xMin = x; if (x > xMax) xMax = x;
+      if (y < yMin) yMin = y; if (y > yMax) yMax = y;
+      if (z < zMin) zMin = z; if (z > zMax) zMax = z;
+    }
+  }
+  bounds = { x0: xMin, x1: xMax, y0: yMin, y1: yMax, z0: zMin, z1: zMax };
+  const indices = [], maxJumpSq = 0.04;
+  for (let r = 0; r < H - 1; r++) for (let c = 0; c < W - 1; c++) {
+    const a = r * W + c, b = a + 1, d = (r + 1) * W + c, e = d + 1;
+    if (valid[a] && valid[b] && valid[d] && valid[e]) {
+      const dx = positions[a*3] - positions[e*3], dy = positions[a*3+1] - positions[e*3+1], dz = positions[a*3+2] - positions[e*3+2];
+      if (dx*dx + dy*dy + dz*dz < maxJumpSq) indices.push(a, d, b, b, d, e);
+    }
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer); gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);  gl.bufferData(gl.ARRAY_BUFFER, uvs, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, extUint ? new Uint32Array(indices) : new Uint16Array(indices), gl.STATIC_DRAW);
+  numIndices = indices.length;
+  makeTexture(ds.tex_rgb, 0); makeTexture(ds.tex_dem, 1); makeTexture(ds.tex_benthic, 2);
+}
+
+function camera() {
+  const aspect = glCanvas.width / Math.max(1, glCanvas.height);
+  const f = 1 / Math.tan((44 * Math.PI / 180) / 2), near = 0.1, far = 25;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const zMid = 0.5 * (bounds.z0 + bounds.z1);
+  const project = (x, y, z) => {
+    const Z = z - zMid, x1 = cy * x - sy * y, y1 = sy * x + cy * y;
+    const y2 = cp * y1 - sp * Z, z2 = sp * y1 + cp * Z;
+    const vx = x1 + panX, vy = z2 + panY, vz = -y2 - zoom;
+    return [(f / aspect) * vx, f * vy, (far + near) / (near - far) * vz + (2 * far * near) / (near - far), -vz];
+  };
+  return {
+    project,
+    mat4() {
+      const m = new Float32Array(16), p0 = project(0,0,0), px = project(1,0,0), py = project(0,1,0), pz = project(0,0,1);
+      for (let r = 0; r < 4; r++) { m[r] = px[r]-p0[r]; m[4+r] = py[r]-p0[r]; m[8+r] = pz[r]-p0[r]; m[12+r] = p0[r]; }
+      return m;
+    }
+  };
+}
+function to2D(cam, x, y, z) {
+  const c = cam.project(x, y, z);
+  if (c[3] <= 0.05) return null;
+  return [(c[0]/c[3]*0.5+0.5) * hudCanvas.width, (1-(c[1]/c[3]*0.5+0.5)) * hudCanvas.height];
+}
+const FONT = '600 11.5px Archivo, "Segoe UI", sans-serif';
+
+function drawHud() {
+  hud.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+  if (!currentDataset) return;
+  const cam = camera();
+  const { x0, x1, y0, y1, z0, z1 } = bounds;
+
+  if ($('gridBtn').getAttribute('aria-pressed') === 'true') {
+    hud.strokeStyle = 'rgba(160, 205, 215, 0.30)'; hud.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const tx = x0 + (x1-x0) * i/4, ty = y0 + (y1-y0) * i/4;
+      const a = to2D(cam, tx, y0, z0), b = to2D(cam, tx, y1, z0), c = to2D(cam, x0, ty, z0), d = to2D(cam, x1, ty, z0);
+      if (a && b) { hud.beginPath(); hud.moveTo(a[0], a[1]); hud.lineTo(b[0], b[1]); hud.stroke(); }
+      if (c && d) { hud.beginPath(); hud.moveTo(c[0], c[1]); hud.lineTo(d[0], d[1]); hud.stroke(); }
+    }
+    hud.font = FONT; hud.fillStyle = '#B7D3D8';
+    const ex = to2D(cam, 0.5*(x0+x1), y0, z0), ey = to2D(cam, x1, 0.5*(y0+y1), z0);
+    if (ex) hud.fillText((x1-x0).toFixed(1) + ' m', ex[0] - 14, ex[1] + 16);
+    if (ey) hud.fillText((y1-y0).toFixed(1) + ' m', ey[0] + 8, ey[1] + 4);
+  }
+
+  const turtles = currentDataset.turtles || [];
+  if (turtles.length && $('turtleBtn').getAttribute('aria-pressed') === 'true') {
+    turtles.forEach(t => {
+      const p = t.pinned_3d_location && t.pinned_3d_location.local_plot_xyz_m;
+      if (!p) return;
+      const scl = turtleLength(t);
+      const [tx, ty, tz] = p, r = 0.5 * scl / 100;
+      const k = [[tx-r,ty-r*.75,tz-.12],[tx+r,ty-r*.75,tz-.12],[tx+r,ty+r*.75,tz-.12],[tx-r,ty+r*.75,tz-.12],
+                 [tx-r,ty-r*.75,tz+.15],[tx+r,ty-r*.75,tz+.15],[tx+r,ty+r*.75,tz+.15],[tx-r,ty+r*.75,tz+.15]];
+      hud.strokeStyle = '#F2A58F'; hud.lineWidth = 1.6;
+      [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]].forEach(([a,b]) => {
+        const A = to2D(cam, ...k[a]), B = to2D(cam, ...k[b]);
+        if (A && B) { hud.beginPath(); hud.moveTo(A[0], A[1]); hud.lineTo(B[0], B[1]); hud.stroke(); }
+      });
+      const top = to2D(cam, tx, ty, tz + 0.2);
+      if (top) {
+        const label = 'Turtle, about ' + Math.round(scl) + ' cm';
+        hud.font = FONT;
+        const w = hud.measureText(label).width;
+        hud.fillStyle = 'rgba(8, 32, 43, 0.9)'; hud.fillRect(top[0] - w/2 - 7, top[1] - 19, w + 14, 22);
+        hud.fillStyle = '#F6C3B4'; hud.fillText(label, top[0] - w/2, top[1] - 4);
+      }
+    });
+  }
+}
+
+function drawScene() {
+  if (!currentDataset) return;
+  gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+  gl.clearColor(0.031, 0.125, 0.169, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
+  gl.uniformMatrix4fv(uMVP, false, camera().mat4());
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer); gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);  gl.enableVertexAttribArray(aUV);  gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 0, 0);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, glTextures[renderMode] || glTextures[0]);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+  gl.drawElements(gl.TRIANGLES, numIndices, extUint ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0);
+  drawHud();
+}
+
+function resizeCanvases() {
+  const r = glCanvas.parentElement.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  glCanvas.width = Math.round(r.width * dpr); glCanvas.height = Math.round(r.height * dpr);
+  hudCanvas.width = Math.round(r.width); hudCanvas.height = Math.round(r.height);
+  drawScene();
+}
+window.addEventListener('resize', resizeCanvases);
+
+glCanvas.addEventListener('mousedown', e => { dragging = true; btn = e.button; lx = e.clientX; ly = e.clientY; $('hint').hidden = true; });
+window.addEventListener('mouseup', () => dragging = false);
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY;
+  if (btn === 0 && !e.shiftKey) { yaw += dx * 0.007; pitch = Math.max(0.08, Math.min(1.45, pitch + dy * 0.007)); }
+  else { panX += dx * 0.003; panY -= dy * 0.003; }
+  drawScene();
+});
+glCanvas.addEventListener('wheel', e => { e.preventDefault(); zoom = Math.max(0.9, Math.min(7.5, zoom * (1 + e.deltaY * 0.001))); drawScene(); }, { passive: false });
+glCanvas.addEventListener('contextmenu', e => e.preventDefault());
+
+function resetCamera() { yaw = -0.34; pitch = 0.44; zoom = 1.95; panX = 0; panY = 0.0; drawScene(); }
+$('resetBtn').onclick = resetCamera;
+['gridBtn', 'turtleBtn'].forEach(id => $(id).onclick = () => {
+  const el = $(id); el.setAttribute('aria-pressed', el.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); drawHud();
+});
+
+// ---------- 3D colouring + legend ----------
+function setMode(m) {
+  renderMode = m;
+  [['modeColour',0],['modeHeight',1],['modeSeabed',2]].forEach(([id, i]) => $(id).setAttribute('aria-pressed', i === m ? 'true' : 'false'));
+  const lg = $('legend');
+  if (m === 1 && currentDataset) {
+    lg.style.display = 'block';
+    lg.innerHTML = 'Height above the seabed<div class="ramp"></div><div class="ends"><span>Low</span><span>' +
+      Number(currentDataset.metrics.relief_span_m).toFixed(2) + ' m higher</span></div>';
+  } else if (m === 2) {
+    lg.style.display = 'block';
+    lg.innerHTML = '<div class="sw"><i style="background:#E6556E"></i>Live coral</div><div class="sw"><i style="background:#41A55F"></i>Algae</div><div class="sw"><i style="background:#EBD7A0"></i>Sand and rock</div>';
+  } else lg.style.display = 'none';
+  drawScene();
+}
+$('modeColour').onclick = () => setMode(0);
+$('modeHeight').onclick = () => setMode(1);
+$('modeSeabed').onclick = () => setMode(2);
+
+// ============================================================================
+// Footage player + timeline
+// ============================================================================
+const video = $('sourceVideo');
+const ICON_PLAY = '<svg viewBox="0 0 14 14"><path d="M3 1.5v11l9-5.5z"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 14 14"><path d="M2.5 1.5h3v11h-3zM8.5 1.5h3v11h-3z"/></svg>';
+function syncPlayIcon() { $('playBtn').innerHTML = video.paused ? ICON_PLAY : ICON_PAUSE; $('playBtn').setAttribute('aria-label', video.paused ? 'Play footage' : 'Pause footage'); }
+$('playBtn').onclick = () => { video.paused ? video.play() : video.pause(); };
+video.addEventListener('play', syncPlayIcon); video.addEventListener('pause', syncPlayIcon);
+
+function updateTimeline() {
+  const d = video.duration || 0, t = video.currentTime || 0, f = d ? t / d : 0;
+  $('played').style.width = (f * 100) + '%';
+  $('head').style.left = (f * 100) + '%';
+  $('timeText').textContent = fmtTime(t) + ' / ' + fmtTime(d);
+  $('timeline').setAttribute('aria-valuenow', Math.round(f * 100));
+  const inside = t <= BUILT_SECONDS + 0.05;
+  $('builtNote').innerHTML = inside
+    ? '<b>Marked section</b>: you are watching the frames the 3D model was built from.'
+    : '<b>Marked section</b>: the frames the 3D model was built from (first ' + BUILT_SECONDS + ' s).';
+}
+function layoutBand() {
+  const d = video.duration || 0;
+  $('builtBand').style.left = '0%';
+  $('builtBand').style.width = d ? Math.min(100, (BUILT_SECONDS / d) * 100) + '%' : '0%';
+}
+video.addEventListener('timeupdate', updateTimeline);
+video.addEventListener('loadedmetadata', () => { layoutBand(); updateTimeline(); });
+
+function seekFromEvent(e) {
+  const r = $('timeline').getBoundingClientRect();
+  const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+  if (video.duration) video.currentTime = f * video.duration;
+}
+let scrubbing = false;
+$('timeline').addEventListener('pointerdown', e => { scrubbing = true; $('timeline').setPointerCapture(e.pointerId); seekFromEvent(e); });
+$('timeline').addEventListener('pointermove', e => { if (scrubbing) seekFromEvent(e); });
+$('timeline').addEventListener('pointerup', () => scrubbing = false);
+$('timeline').addEventListener('keydown', e => {
+  if (!video.duration) return;
+  if (e.key === 'ArrowRight') video.currentTime = Math.min(video.duration, video.currentTime + 1);
+  if (e.key === 'ArrowLeft') video.currentTime = Math.max(0, video.currentTime - 1);
+});
+
+// ============================================================================
+// Transect index + readouts
+// ============================================================================
+function turtleLength(t) {
+  const m = t.morphometric_3d_sizing || t.morphometrics_3d || {};
+  return m.straight_carapace_length_cm || t.estimated_scl_cm || 60;
+}
+function describe(ds) {
+  const n = (ds.turtles || []).length;
+  return n ? '<span class="flag">Turtle present</span>' : '<span class="flag none">No turtle</span>';
+}
+function renderIndex() {
+  const ul = $('transectList'); ul.innerHTML = '';
+  TRANSECTS.forEach(t => {
+    const ds = (window.PRELOADED_REEF_DEMOS || {})[t.id];
+    if (!ds) return;
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.className = 'transect'; b.dataset.id = t.id;
+    b.innerHTML = '<img src="thumbs/' + t.id + '.jpg" alt="">' +
+      '<span><div class="name">' + t.name + '</div><div class="meta">' + t.dur + ' · ' + describe(ds) + '<br>' +
+      pct(ds.metrics.live_coral_pct) + ' live coral</div></span>';
+    b.onclick = () => selectTransect(t.id);
+    li.appendChild(b); ul.appendChild(li);
+  });
+}
+
+function selectTransect(id) {
+  const ds = window.PRELOADED_REEF_DEMOS[id];
+  if (!ds) return;
+  if (location.hash.replace('#', '').split('/')[0] !== id) history.replaceState(null, '', '#' + id);
+  currentDataset = ds;
+  document.querySelectorAll('.transect').forEach(b => b.setAttribute('aria-current', b.dataset.id === id ? 'true' : 'false'));
+
+  // Footage
+  $('videoName').textContent = ds.video_filename;
+  video.src = 'videos/' + ds.video_filename;
+  video.load();
+  video.play().catch(() => {});
+  syncPlayIcon();
+
+  // Complexity
+  const m = ds.metrics, rug = Number(m.rugosity);
+  $('uiRugosity').textContent = rug.toFixed(2);
+  const pos = Math.max(0, Math.min(1, (rug - 1.0) / 0.6));
+  $('rugPin').style.left = (pos * 100) + '%';
+  $('uiArea').textContent = 'The reef has ' + Number(m.surface_area_3d_m2).toFixed(1) + ' m² of surface over a ' +
+    Number(m.footprint_2d_m2).toFixed(1) + ' m² footprint, and stands ' + Number(m.relief_span_m).toFixed(2) + ' m high.';
+
+  // Cover
+  const c = Number(m.live_coral_pct), a = Number(m.algae_pct), s = Number(m.sand_pct);
+  $('coverBar').innerHTML = '<span style="width:' + c + '%;background:var(--coral)"></span><span style="width:' + a +
+    '%;background:var(--algae)"></span><span style="width:' + s + '%;background:var(--sand)"></span>';
+  $('uiCoral').textContent = pct(c); $('uiAlgae').textContent = pct(a); $('uiSand').textContent = pct(s);
+
+  // Turtle: only exists when one was verified in the footage
+  const turtles = ds.turtles || [];
+  $('turtleSection').hidden = turtles.length === 0;
+  $('turtleBtn').hidden = turtles.length === 0;
+  if (turtles.length) {
+    const t = turtles[0], cmp = t.smsrc_database_comparison || {};
+    $('uiTurtleId').textContent = t.assigned_individual_id;
+    $('uiTurtleScl').textContent = 'about ' + Math.round(turtleLength(t)) + ' cm';
+    const isNew = /NEW/.test(t.match_status || '');
+    $('uiTurtleMatch').textContent = isNew ? 'New animal, no match' : 'Matches ' + cmp.closest_catalog_id;
+    $('uiTurtleNear').innerHTML = (isNew ? 'Closest of 404 known turtles: ' : 'Compared with 404 known turtles: ') +
+      '<span style="white-space:nowrap">' + cmp.closest_catalog_id + '</span> (similarity ' + Number(cmp.max_cosine_similarity).toFixed(2) + ').';
+  }
+  $('modelNote').innerHTML = 'Built from the first ' + BUILT_SECONDS + ' s of this clip' + (turtles.length ? '. The turtle is pinned in place.' : '. No turtle was detected, so nothing is outlined.');
+
+  // 3D model
+  buildMesh(ds);
+  setMode(renderMode);
+  resetCamera();
+}
+
+// ============================================================================
+// Downloads
+// ============================================================================
+function save(href, name) { const a = document.createElement('a'); a.href = href; a.download = name; a.click(); }
+$('dlSheet').onclick = () => currentDataset && save(currentDataset.studio_report_jpg, 'reef_report_' + currentDataset.id + '.jpg');
+$('dlObj').onclick = () => {
+  if (!currentDataset) return;
+  const d = currentDataset, W = d.grid_w, H = d.grid_h, xyz = d.xyz_flat, val = d.valid_flat;
+  const lines = ['# Al Qalqali reef surface (' + d.id + '), local metres'];
+  for (let i = 0; i < W * H; i++) lines.push('v ' + xyz[i*3] + ' ' + xyz[i*3+1] + ' ' + xyz[i*3+2]);
+  for (let r = 0; r < H - 1; r++) for (let c = 0; c < W - 1; c++) {
+    const a = r * W + c, b = a + 1, e = (r + 1) * W + c, f = e + 1;
+    if (val[a] && val[b] && val[e] && val[f]) { lines.push('f ' + (a+1) + ' ' + (e+1) + ' ' + (b+1)); lines.push('f ' + (b+1) + ' ' + (e+1) + ' ' + (f+1)); }
+  }
+  save(URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/plain' })), 'reef_surface_' + d.id + '.obj');
+};
+$('dlJson').onclick = () => {
+  if (!currentDataset) return;
+  const d = currentDataset;
+  const payload = { transect: d.id, footage: d.video_filename, scale_basis: 'ROV assumed 1.75 m above seabed', metrics: d.metrics, turtles: d.turtles };
+  save(URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })), 'reef_measurements_' + d.id + '.json');
+};
+
+// ============================================================================
+window.addEventListener('DOMContentLoaded', () => {
+  renderIndex();
+  resizeCanvases();
+  const [hid, hmode] = (location.hash || '').replace('#', '').split('/');
+  selectTransect(TRANSECTS.some(t => t.id === hid) ? hid : 'sample_reef_1');
+  const modes = { colour: 0, height: 1, seabed: 2 };
+  if (hmode in modes) setMode(modes[hmode]);
+});
+</script>
+</body>
+</html>
